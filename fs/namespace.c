@@ -736,6 +736,7 @@ static struct mountpoint *new_mountpoint(struct dentry *dentry)
 		return ERR_PTR(ret);
 	}
 
+	INIT_LIST_HEAD(&mp->m_list);
 	mp->m_dentry = dentry;
 	mp->m_count = 1;
 	hlist_add_head(&mp->m_hash, chain);
