@@ -59,6 +59,7 @@ config ARCH_TEGRA_124_SOC
 	select ARM_L1_CACHE_SHIFT_6
 	select HAVE_ARM_ARCH_TIMER
 	select PINCTRL_TEGRA124
+	select PINCTRL_TEGRA210
 	select TEGRA_TIMER
 	help
 	  Support for NVIDIA Tegra T124 processor family, based on the
