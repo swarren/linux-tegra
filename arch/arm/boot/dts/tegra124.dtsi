@@ -988,6 +988,7 @@
 			     <GIC_PPI 10
 				(GIC_CPU_MASK_SIMPLE(4) | IRQ_TYPE_LEVEL_LOW)>;
 		interrupt-parent = <&gic>;
+		arm,cpu-registers-not-fw-configured;
 	};
 
 	lt@0x50041204 {
