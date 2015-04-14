@@ -18,19 +18,24 @@
 #define ARCH_TIMER_CTRL_ENABLE		(1 << 0)
 #define ARCH_TIMER_CTRL_IT_MASK		(1 << 1)
 
+struct lt_user_timestamps {
+	u64 time_trigger;
+	u64 time_isr;
+};
+
 struct latency_tester {
 	struct latency_tester __percpu **lt_percpu;
 	int irq;
 	struct dentry *debugfs;
 	bool open;
-	bool data_in_queue;
 	spinlock_t lock;
 	wait_queue_head_t wait;
 	u32 cntfrq;
 	int timer_cpu;
 	u64 last_cval;
-	u64 time_trigger;
-	u64 time_isr;
+	struct lt_user_timestamps uts[64];
+	int uts_write_count;
+	int uts_read_count;
 };
 
 static inline u32 read_cntfrq(void)
@@ -145,28 +150,41 @@ ssize_t lt_read(struct file *file, char __user *buf,
 	struct latency_tester *lt = file->f_inode->i_private;
 	unsigned long flags;
 	int ret;
+	int len_entries;
+	int uts_entries;
+	int uts_read_idx;
+	int wrap_entries;
+	int entries;
 
-	if (len != 16)
+	if (len < sizeof(struct lt_user_timestamps))
 		return -EINVAL;
 
 	for (;;) {
-		if (lt->data_in_queue) {
-			spin_lock_irqsave(&lt->lock, flags);
-			ret = copy_to_user(buf, &lt->time_trigger, len);
-			if (!ret)
-				lt->data_in_queue = false;
-			spin_unlock_irqrestore(&lt->lock, flags);
-			if (ret)
-				return ret;
-
-			*ppos += len;
-			return len;
-		}
-
-		ret = wait_event_interruptible(lt->wait, lt->data_in_queue);
+		spin_lock_irqsave(&lt->lock, flags);
+		if (lt->uts_write_count > lt->uts_read_count)
+			break;
+		spin_unlock_irqrestore(&lt->lock, flags);
+		ret = wait_event_interruptible(lt->wait, lt->uts_write_count > lt->uts_read_count);
 		if (ret)
 			return ret;
 	}
+
+	len_entries = len / sizeof(struct lt_user_timestamps);
+	uts_entries = lt->uts_write_count - lt->uts_read_count;
+	uts_read_idx = lt->uts_read_count % ARRAY_SIZE(lt->uts);
+	wrap_entries = ARRAY_SIZE(lt->uts) - uts_read_idx;
+	entries = min(len_entries, min(uts_entries, wrap_entries));
+	len = entries * sizeof(struct lt_user_timestamps);
+
+	ret = copy_to_user(buf, &lt->uts[uts_read_idx], len);
+	if (!ret) {
+		lt->uts_read_count += entries;
+		*ppos += len;
+		ret = len;
+	}
+	spin_unlock_irqrestore(&lt->lock, flags);
+
+	return ret;
 }
 
 static const struct file_operations lt_fileops = {
@@ -182,13 +200,18 @@ static irqreturn_t latency_tester_isr(int irq, void *arg)
 {
 	struct latency_tester **ltp = arg;
 	struct latency_tester *lt = *ltp;
+	u64 cntvct;
 	unsigned long flags;
+	int uts_write_idx;
+
+	cntvct = read_cntvct();
 
 	spin_lock_irqsave(&lt->lock, flags);
-	if (!lt->data_in_queue) {
-		lt->time_trigger = lt->last_cval;
-		lt->time_isr = read_cntvct();
-		lt->data_in_queue = true;
+	if ((lt->uts_write_count - lt->uts_read_count) < ARRAY_SIZE(lt->uts)) {
+		uts_write_idx = lt->uts_write_count % ARRAY_SIZE(lt->uts);
+		lt->uts[uts_write_idx].time_trigger = lt->last_cval;
+		lt->uts[uts_write_idx].time_isr = cntvct;
+		lt->uts_write_count++;
 		wake_up_interruptible(&lt->wait);
 	}
 	spin_unlock_irqrestore(&lt->lock, flags);
