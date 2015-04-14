@@ -30,7 +30,7 @@ struct latency_tester {
 	bool open;
 	spinlock_t lock;
 	wait_queue_head_t wait;
-	u32 cntfrq;
+	u32 cval_inc;
 	int timer_cpu;
 	u64 last_cval;
 	struct lt_user_timestamps uts[64];
@@ -72,7 +72,7 @@ static inline void write_cntv_cval(u64 val)
 
 static inline void set_timer_expiry(struct latency_tester *lt)
 {
-	lt->last_cval += lt->cntfrq;
+	lt->last_cval += lt->cval_inc;
 	write_cntv_cval(lt->last_cval);
 }
 
@@ -235,7 +235,7 @@ static int latency_tester_probe(struct platform_device *pdev)
 
 	spin_lock_init(&lt->lock);
 	init_waitqueue_head(&lt->wait);
-	lt->cntfrq = read_cntfrq();
+	lt->cval_inc = read_cntfrq() / 10;
 
 	lt->irq = irq_of_parse_and_map(pdev->dev.of_node, 0);
 	if (lt->irq < 0) {
