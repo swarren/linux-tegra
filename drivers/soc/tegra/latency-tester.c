@@ -71,15 +71,20 @@ static inline void set_timer_expiry(struct latency_tester *lt)
 	write_cntv_cval(lt->last_cval);
 }
 
-static inline void enable_timer(struct latency_tester *lt)
+static void enable_timer_imp(void *arg)
 {
-	lt->timer_cpu = smp_processor_id();
+	struct latency_tester *lt = arg;
 
 	lt->last_cval = read_cntvct();
 	set_timer_expiry(lt);
 
 	write_cntv_ctl(ARCH_TIMER_CTRL_ENABLE);
 	enable_percpu_irq(lt->irq, 0);
+}
+
+static inline void enable_timer(struct latency_tester *lt)
+{
+	smp_call_function_single(lt->timer_cpu, enable_timer_imp, lt, 1);
 }
 
 static void disable_timer_imp(void *arg)
@@ -208,8 +213,6 @@ static int latency_tester_probe(struct platform_device *pdev)
 	spin_lock_init(&lt->lock);
 	init_waitqueue_head(&lt->wait);
 	lt->cntfrq = read_cntfrq();
-
-	disable_timer(lt);
 
 	lt->irq = irq_of_parse_and_map(pdev->dev.of_node, 0);
 	if (lt->irq < 0) {
