@@ -1,17 +1,21 @@
-NVIDIA Tegra xHCI controller
-============================
+NVIDIA Tegra XUSB (XHCI) controller
+===================================
 
-The Tegra xHCI controller supports both USB2 and USB3 interfaces exposed
+The Tegra XUSB controller supports both USB2 and USB3 interfaces exposed
 by the Tegra XUSB pad controller.
 
 Required properties:
 --------------------
- - compatible: For Tegra124, must contain "nvidia,tegra124-xhci".
-   Otherwise, must contain '"nvidia,<chip>-xhci", "nvidia,tegra124-xhci"'
-   where <chip> is tegra132.
- - reg: Must contain the base and length of the xHCI host registers and XUSB
-   IPFS registers.
- - interrupts: Must contain the xHCI host interrupt.
+ - compatible: Valid options are:
+   Tegra124: "nvidia,tegra124-xusb".
+   Tegra132: "nvidia,tegra132-xusb", "nvidia,tegra124-xusb".
+ - reg: Must contain the following entries, in the following order:
+    - The xHCI host registers.
+    - The IPFS registers.
+    - The FPCI registers.
+ - interrupts: Must contain the following entries, in the following order:
+    - The xHCI host interrupt
+    - The XUSB mailbox interrupt.
  - clocks: Must contain an entry for each entry in clock-names.
    See ../clock/clock-bindings.txt for details.
  - clock-names: Must include the following entries:
@@ -33,10 +37,6 @@ Required properties:
    - xusb_ss
    - xusb_src
    Note that xusb_src is the shared reset for xusb_{ss,hs,fs,falcon,host}_src.
- - mboxes: Must contain an entry for the XUSB mailbox channel.
-   See ../mailbox/mailbox.txt for details.
- - mbox-names: Must include the following entries:
-   - xusb
  - avddio-pex-supply: PCIe/USB3 analog logic power supply.  Must supply 1.05V.
  - dvddio-pex-supply: PCIe/USB3 digital logic power supply.  Must supply 1.05V.
  - avdd-usb-supply: USB controller power supply.  Must supply 3.3V.
@@ -58,10 +58,12 @@ Optional properties:
 Example:
 --------
 	usb-host@0,70090000 {
-		compatible = "nvidia,tegra124-xhci";
+		compatible = "nvidia,tegra124-xusb";
 		reg = <0x0 0x70090000 0x0 0x8000>,
-		      <0x0 0x70099000 0x0 0x1000>;
-		interrupts = <GIC_SPI 39 IRQ_TYPE_LEVEL_HIGH>;
+		      <0x0 0x70099000 0x0 0x1000>,
+		      <0x0 0x70098000 0x0 0x1000>;
+		interrupts = <GIC_SPI 39 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 40 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&tegra_car TEGRA124_CLK_XUSB_HOST>,
 			 <&tegra_car TEGRA124_CLK_XUSB_HOST_SRC>,
 			 <&tegra_car TEGRA124_CLK_XUSB_FALCON_SRC>,
@@ -79,8 +81,6 @@ Example:
 			      "clk_m", "pll_e";
 		resets = <&tegra_car 89>, <&tegra_car 156>, <&tegra_car 143>;
 		reset-names = "xusb_host", "xusb_ss", "xusb_src";
-		mboxes = <&xusb_mbox>;
-		mbox-names = "xusb";
 		phys = <&padctl TEGRA_XUSB_PADCTL_UTMI_P1>, /* mini-PCIe USB */
 		       <&padctl TEGRA_XUSB_PADCTL_UTMI_P2>, /* USB A */
 		       <&padctl TEGRA_XUSB_PADCTL_USB3_P0>; /* USB A */
